@@ -1,4 +1,6 @@
-﻿using BepInEx;
+﻿using System;
+using BepInEx;
+using BepInEx.Configuration;
 using HarmonyLib;
 using LargeNumbers;
 using UnityEngine;
@@ -9,14 +11,18 @@ namespace SpaceTravelIdleUnlocker
     public class Plugin : BaseUnityPlugin
     {
         public static Plugin Instance;
-        
+        public ConfigEntry<double> DarkMatterExponent;
+        public ConfigEntry<double> DarkMatterFactor;
+
         private void Awake()
         {
             // Plugin startup logic
             Instance = this;
             Logger.LogInfo($"Plugin {PluginInfo.PLUGIN_GUID} is loaded!");
-            
+            DarkMatterExponent = Config.Bind("DarkMatter", "Exponent", 0.9, "Exponent component of Big Bang Formula.");
+            DarkMatterFactor = Config.Bind("DarkMatter", "Factor", 0.35, "Factor component of Big Bang Formula.");
             Harmony.CreateAndPatchAll(typeof(Plugin));
+            Logger.LogInfo($"Plugin {PluginInfo.PLUGIN_GUID} is initialized!");
         }
         [HarmonyPatch(typeof(BigBangManager), "CalculateDarkMatter")]
         [HarmonyPrefix]
@@ -29,10 +35,31 @@ namespace SpaceTravelIdleUnlocker
             var panel = GameObject.FindObjectOfType<BigBangPanel>(true);
             if (panel != null)
             {
-                AccessTools.Field(typeof(BigBangPanel), "BIG_BANG_FORMULA").SetValue(panel, "(((R + I) * (E + T + D)) ^ 0.9) * 0.35 = <color=#bf2222><b>{0}</b></color>");
+                AccessTools.Field(typeof(BigBangPanel), "BIG_BANG_FORMULA").SetValue(panel, 
+                    "(((R + I) * (E + T + D)) ^ " + Instance.DarkMatterExponent.Value + ") * " + Instance.DarkMatterFactor.Value + " = <color=#bf2222><b>{0}</b></color>");
             }
             
             return false; // Returning false in prefix patches skips running the original code
+        }
+        [HarmonyPatch(typeof(BigBangManager), "CalculateBigBangDarkMatter")]
+        [HarmonyPrefix]
+        static bool ModifiedCalculateBigBangDarkMatter(BigBangManager __instance, ref ScientificNotation __result)
+        {
+            __instance.researchScore = TechnoManager.shared.CalculateBigBangResearchScore();
+            __instance.infraScore = TechnoManager.shared.CalculateBigBangInfraScore();
+            ScientificNotation a = __instance.researchScore + __instance.infraScore;
+            StatsManager.shared.CalculateBigBangDMStats(out __instance.energyScore, out __instance.travelDistanceScore, out __instance.maxDamageScore);
+            int num = Mathf.Max(0, __instance.energyScore + __instance.travelDistanceScore + __instance.maxDamageScore);
+            double num2 = Math.Pow((a * (double)num).Standard(), Instance.DarkMatterExponent.Value) * Instance.DarkMatterFactor.Value;
+            if (num2 <= 0.0)
+            {
+                __result = ScientificNotation.zero;
+            }
+            else
+            {
+                __result = new ScientificNotation(num2);
+            }
+            return false;
         }
     }
 }
