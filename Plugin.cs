@@ -13,17 +13,37 @@ namespace SpaceTravelIdleUnlocker
         public static Plugin Instance;
         public ConfigEntry<double> DarkMatterExponent;
         public ConfigEntry<double> DarkMatterFactor;
+        public ConfigEntry<bool> GrantBetaCards;
 
         private void Awake()
         {
             // Plugin startup logic
             Instance = this;
             Logger.LogInfo($"Plugin {PluginInfo.PLUGIN_GUID} is loaded!");
+            GrantBetaCards = Config.Bind("General", "GrantBetaCards", false,
+                "Grants the user a set of cards that is normally limited to beta testers. Seems to require a new save game.");
+                
             DarkMatterExponent = Config.Bind("DarkMatter", "Exponent", 0.9, "Exponent component of Big Bang Formula.");
             DarkMatterFactor = Config.Bind("DarkMatter", "Factor", 0.35, "Factor component of Big Bang Formula.");
+            
+            
             Harmony.CreateAndPatchAll(typeof(Plugin));
             Logger.LogInfo($"Plugin {PluginInfo.PLUGIN_GUID} is initialized!");
         }
+        // General Section
+        [HarmonyPatch(typeof(CardBag), MethodType.Constructor)]
+        [HarmonyPostfix]
+        static void ModifiedCardBag(CardBag __instance)
+        {
+            if (Instance.GrantBetaCards.Value)
+            {
+                __instance.AddBetaCard1();
+                __instance.AddBetaCard2();
+                __instance.AddBetaCard3();
+            }
+        }
+
+        // Dark Matter Section
         [HarmonyPatch(typeof(BigBangManager), "CalculateDarkMatter")]
         [HarmonyPrefix]
         static bool ModifiedCalculateDarkMatter(BigBangManager __instance)
